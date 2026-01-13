@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      body {
+        width: 340px;
+        padding: 0;
+        margin: 0;
+        font-family: "Segoe UI", system-ui, sans-serif;
+        background: #1e1e1e; /* Dark theme */
+        color: #e0e0e0;
+      }
+      .container {
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+      h2 {
+        margin: 0 0 10px 0;
+        font-size: 18px;
+        font-weight: 600;
+        background: linear-gradient(
+          90deg,
+          #ffa116,
+          #ffcb66
+        ); /* LeetCode colorsish */
+        /*-webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;*/
+      }
+      p {
+        font-size: 13px;
+        color: #aaa;
+        margin-bottom: 20px;
+        line-height: 1.4;
+      }
+      button {
+        width: 100%;
+        padding: 12px;
+        background: #ffa116; /* LeetCode Orange */
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 14px;
+        transition: transform 0.1s, opacity 0.2s;
+      }
+      button:hover {
+        opacity: 0.9;
+      }
+      button:active {
+        transform: scale(0.98);
+      }
+      #status {
+        margin-top: 16px;
+        padding: 12px;
+        background: #2d2d2d;
+        border-radius: 8px;
+        color: #ccc;
+        font-size: 13px;
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid #333;
+        min-height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .success {
+        color: #4caf50 !important;
+        border-color: #2e5c31 !important;
+        background: #1e3320 !important;
+      }
+      .error {
+        color: #f44336 !important;
+        border-color: #5c2b2b !important;
+        background: #331e1e !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>LeetCode Mentor</h2>
+      <p>AI-powered hints directly in your problem page.</p>
+      <button id="checkBtn">Check Connection</button>
+      <div id="status">Ready to connect.</div>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>
