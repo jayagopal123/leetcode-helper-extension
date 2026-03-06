@@ -5,7 +5,12 @@
   "description": "A learning assistant that provides progressive hints.",
   "content_scripts": [
     {
-      "matches": ["https://leetcode.com/problems/*"],
+      "matches": [
+        "https://leetcode.com/problems/*",
+        "https://www.geeksforgeeks.org/problems/*",
+        "https://www.hackerrank.com/challenges/*",
+        "https://codeforces.com/problemset/problem/*/*"
+      ],
       "js": ["scripts/content.js"],
       "run_at": "document_idle"
     }
@@ -13,9 +18,16 @@
   "background": {
     "service_worker": "scripts/background.js"
   },
-  "permissions": ["storage"],
+  "action": {
+    "default_title": "LeetCode Learning Hints",
+    "default_popup": "popup/popup.html"
+  },
+  "permissions": ["storage", "tabs"],
   "host_permissions": [
     "https://leetcode.com/*",
+    "https://www.geeksforgeeks.org/*",
+    "https://www.hackerrank.com/*",
+    "https://codeforces.com/*",
     "https://generativelanguage.googleapis.com/*"
   ]
 }
