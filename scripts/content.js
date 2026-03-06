@@ -1,24 +1,55 @@
 // scripts/content.js
 
-// 1. Singleton Guard
 if (document.getElementById("lc-mentor-root")) {
-  console.log("LeetCode Mentor: Already injected.");
+  console.log("DSA Mentor: Already injected.");
 } else {
   injectSidebar();
 }
 
-// 2. Message Listener (Fixes "Receiving end does not exist")
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.type === "GET_PROBLEM") {
-    const problemTitle = document.title.split("-")[0].trim();
-    sendResponse({ problemId: problemTitle });
+  if (request.type === "OPEN_MENTOR_PANEL") {
+    const result = ensureMentorPanelVisible();
+    sendResponse({ success: result.success, message: result.message });
+    return true;
   }
-  return true;
+
+  if (request.type === "GET_PROBLEM" || request.type === "ANALYZE_PAGE") {
+    const context = getPageContext();
+    sendResponse({
+      status: context.status,
+      problemId: context.title,
+      context,
+    });
+    return true;
+  }
+  return false;
 });
 
-function injectSidebar() {
-  console.log("LeetCode Mentor: Initializing...");
+function ensureMentorPanelVisible() {
+  let host = document.getElementById("lc-mentor-root");
+  if (!host) {
+    injectSidebar();
+    host = document.getElementById("lc-mentor-root");
+  }
 
+  if (!host || !host.shadowRoot) {
+    return { success: false, message: "Panel root unavailable." };
+  }
+
+  const sidebar = host.shadowRoot.getElementById("sidebar");
+  const toggleBtn = host.shadowRoot.getElementById("toggle-btn");
+
+  if (sidebar) {
+    sidebar.classList.remove("minimized");
+  }
+  if (toggleBtn) {
+    toggleBtn.textContent = "X";
+  }
+
+  return { success: true, message: "Panel is visible." };
+}
+
+function injectSidebar() {
   const host = document.createElement("div");
   host.id = "lc-mentor-root";
   host.style.position = "fixed";
@@ -26,31 +57,32 @@ function injectSidebar() {
   host.style.right = "0";
   host.style.zIndex = "2147483647";
   host.style.height = "100vh";
-  host.style.width = "0"; // Initially just the shadow host, content handles width
+  host.style.width = "0";
 
   const shadow = host.attachShadow({ mode: "open" });
 
-  // --- STYLES ---
   const styleSheet = `
     <style>
-      :host { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-      
+      :host { font-family: "Segoe UI", system-ui, sans-serif; }
+
       .sidebar {
-        width: 400px; 
-        height: 100vh; 
-        background: rgba(26, 26, 26, 0.95); 
+        position: fixed;
+        right: 0;
+        top: 0;
+        width: min(400px, 92vw);
+        height: 100vh;
+        background: rgba(26, 26, 26, 0.95);
         backdrop-filter: blur(10px);
         color: #e0e0e0;
-        box-shadow: -4px 0 20px rgba(0,0,0,0.6); 
+        box-shadow: -4px 0 20px rgba(0,0,0,0.6);
         border-left: 1px solid #333;
-        display: flex; 
+        display: flex;
         flex-direction: column;
         transition: transform 0.3s ease;
       }
-      
-      .sidebar.minimized {
-        transform: translateX(100%);
-      }
+
+      /* Keep a slim tab visible so the user can reopen the panel. */
+      .sidebar.minimized { transform: translateX(calc(100% - 40px)); }
 
       .toggle-btn {
         position: absolute;
@@ -66,78 +98,133 @@ function injectSidebar() {
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 20px;
-        box-shadow: -2px 0 10px rgba(0,0,0,0.2);
+        font-size: 16px;
       }
 
       .header {
-        padding: 16px; 
-        background: rgba(38, 38, 38, 0.9); 
+        padding: 16px;
+        background: rgba(38, 38, 38, 0.9);
         border-bottom: 1px solid #333;
-        display: flex; 
-        justify-content: space-between; 
+        display: flex;
+        justify-content: space-between;
         align-items: center;
       }
       .header h2 { margin: 0; font-size: 16px; font-weight: 600; color: #fff; }
+
       .icon-btn {
-        background: none; border: none; color: #aaa; cursor: pointer; font-size: 18px; padding: 4px;
-        transition: color 0.2s;
+        background: none;
+        border: none;
+        color: #aaa;
+        cursor: pointer;
+        font-size: 16px;
+        padding: 4px;
       }
       .icon-btn:hover { color: #fff; }
 
-      .content { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; scrollbar-width: thin; scrollbar-color: #444 #1a1a1a; }
-      
-      .chat-message { padding: 12px; border-radius: 8px; font-size: 14px; line-height: 1.5; word-wrap: break-word; white-space: pre-wrap; }
+      .content {
+        flex: 1;
+        padding: 16px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .chat-message {
+        padding: 12px;
+        border-radius: 8px;
+        font-size: 14px;
+        line-height: 1.5;
+        word-wrap: break-word;
+        white-space: pre-wrap;
+      }
       .message-bot { background: #333; align-self: flex-start; border-bottom-left-radius: 0; }
-      .message-user { background: #0078d4; color: white; align-self: flex-end; border-bottom-right-radius: 0; }
-      .message-system { background: #2d2d2d; color: #888; font-size: 12px; align-self: center; border: 1px dashed #444; }
+      .message-user { background: #0078d4; color: #fff; align-self: flex-end; border-bottom-right-radius: 0; }
+      .message-system { background: #2d2d2d; color: #bcbcbc; font-size: 12px; align-self: center; border: 1px dashed #444; }
 
-      .input-area { padding: 16px; background: rgba(38, 38, 38, 0.9); border-top: 1px solid #333; }
-      textarea {
-        width: 100%; height: 70px; background: #333; border: 1px solid #444; border-radius: 6px;
-        color: #fff; padding: 10px; font-family: inherit; resize: none; box-sizing: border-box;
-      }
-      textarea:focus { outline: none; border-color: #0078d4; }
-      
-      .main-btn {
-        margin-top: 10px; width: 100%; padding: 10px; background: #0078d4; color: white;
-        border: none; border-radius: 6px; cursor: pointer; font-weight: 600;
-        transition: background 0.2s;
-      }
-      .main-btn:hover { background: #0063b1; }
-      .main-btn:disabled { background: #444; cursor: not-allowed; opacity: 0.7; }
-
-      /* Settings Pane */
       .settings-pane {
-        padding: 16px; background: #222; border-bottom: 1px solid #333;
-        display: none; 
-        flex-direction: column; gap: 10px;
-        animation: slideDown 0.2s ease;
+        padding: 16px;
+        background: #222;
+        border-bottom: 1px solid #333;
+        display: none;
+        flex-direction: column;
+        gap: 10px;
       }
-      @keyframes slideDown { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
       .settings-pane.visible { display: flex; }
       .settings-label { font-size: 12px; color: #aaa; }
       .api-input {
-        width: 100%; padding: 8px; background: #111; border: 1px solid #444; color: #fff;
-        border-radius: 4px; box-sizing: border-box;
+        width: 100%;
+        padding: 8px;
+        background: #111;
+        border: 1px solid #444;
+        color: #fff;
+        border-radius: 4px;
+        box-sizing: border-box;
       }
+
+      .input-area {
+        padding: 16px;
+        background: rgba(38, 38, 38, 0.9);
+        border-top: 1px solid #333;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+
+      .mode-select {
+        width: 100%;
+        padding: 8px;
+        background: #333;
+        border: 1px solid #444;
+        border-radius: 6px;
+        color: #fff;
+      }
+
+      textarea {
+        width: 100%;
+        height: 70px;
+        background: #333;
+        border: 1px solid #444;
+        border-radius: 6px;
+        color: #fff;
+        padding: 10px;
+        font-family: inherit;
+        resize: none;
+        box-sizing: border-box;
+      }
+      textarea:focus { outline: none; border-color: #0078d4; }
+
+      .main-btn {
+        margin-top: 10px;
+        width: 100%;
+        padding: 10px;
+        background: #0078d4;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .main-btn:hover { background: #0063b1; }
+      .main-btn:disabled { background: #444; cursor: not-allowed; opacity: 0.7; }
     </style>
   `;
 
-  // --- HTML STRUCTURE ---
   const htmlContent = `
     <div class="sidebar" id="sidebar">
-      <button class="toggle-btn" id="toggle-btn" title="Toggle Sidebar">🧠</button>
-      
+      <button class="toggle-btn" id="toggle-btn" title="Toggle Sidebar">X</button>
+
       <div class="header">
-        <h2>LeetCode Mentor</h2>
+        <h2>DSA Mentor</h2>
         <div style="display:flex; gap: 8px;">
-          <button id="clear-chat" class="icon-btn" title="Clear Chat">🗑️</button>
-          <button id="settings-toggle" class="icon-btn" title="Settings">⚙️</button>
+          <button id="clear-chat" class="icon-btn" title="Clear Chat">CLR</button>
+          <button id="settings-toggle" class="icon-btn" title="Settings">SET</button>
         </div>
       </div>
 
-      <!-- Settings Panel -->
       <div id="settings-pane" class="settings-pane">
         <label class="settings-label">Gemini API Key</label>
         <input type="password" id="api-key-input" class="api-input" placeholder="Enter Google Gemini API Key" />
@@ -145,11 +232,19 @@ function injectSidebar() {
       </div>
 
       <div class="content" id="chat-history">
-        <div class="chat-message message-bot">Hello! I'm your LeetCode Mentor. I can see the problem and your code. Ask me for a hint!</div>
+        <div class="chat-message message-bot">I can detect the current DSA problem from this page. Ask for a hint to get started.</div>
       </div>
-      
+
       <div class="input-area">
-        <textarea id="user-input" placeholder="Type your question... (Ctrl+Enter to send)"></textarea>
+        <div class="row">
+          <select id="mode-select" class="mode-select">
+            <option value="hint">Hint (default)</option>
+            <option value="approach">Approach</option>
+            <option value="pseudocode">Pseudocode</option>
+            <option value="full_solution">Full Solution</option>
+          </select>
+          <textarea id="user-input" placeholder="Type your question... (Ctrl+Enter to send)"></textarea>
+        </div>
         <button id="ask-btn" class="main-btn">Ask Mentor</button>
       </div>
     </div>
@@ -157,7 +252,6 @@ function injectSidebar() {
 
   shadow.innerHTML = styleSheet + htmlContent;
 
-  // --- LOGIC ---
   const sidebar = shadow.getElementById("sidebar");
   const toggleBtn = shadow.getElementById("toggle-btn");
   const settingsToggle = shadow.getElementById("settings-toggle");
@@ -168,54 +262,50 @@ function injectSidebar() {
   const askBtn = shadow.getElementById("ask-btn");
   const userInput = shadow.getElementById("user-input");
   const chatHistory = shadow.getElementById("chat-history");
+  const modeSelect = shadow.getElementById("mode-select");
 
   let isMinimized = false;
 
-  // 1. Load API Key
   chrome.storage.local.get(["geminiApiKey"], (result) => {
     if (result.geminiApiKey) {
       apiKeyInput.value = result.geminiApiKey;
     } else {
       settingsPane.classList.add("visible");
-      apiKeyInput.value = "AIzaSyDIOfwicbfS7c8b8ot5g0gllCyzTDQN61o"; // Pre-filled for convenience
       appendMessage(
         chatHistory,
-        "API Key pre-filled. Please click 'Save Key' above to start!",
-        "system"
+        "Set your Gemini API key in settings to start.",
+        "system",
       );
     }
   });
 
-  // 2. Toggle Sidebar
   toggleBtn.addEventListener("click", () => {
     isMinimized = !isMinimized;
     sidebar.classList.toggle("minimized");
-    toggleBtn.innerHTML = isMinimized ? "🧠" : "❌";
-    toggleBtn.style.borderRadius = isMinimized ? "8px 0 0 8px" : "50%";
-    if (isMinimized) toggleBtn.style.left = "-50px";
-    else toggleBtn.style.left = "-40px";
+    toggleBtn.textContent = isMinimized ? "AI" : "X";
   });
 
-  // 3. Settings & Clear
   settingsToggle.addEventListener("click", () =>
-    settingsPane.classList.toggle("visible")
+    settingsPane.classList.toggle("visible"),
   );
+
   clearChatBtn.addEventListener("click", () => {
     chatHistory.innerHTML =
-      '<div class="chat-message message-bot">Chat cleared. Ready for new questions!</div>';
+      '<div class="chat-message message-bot">Chat cleared. Ask for a hint when ready.</div>';
   });
 
   saveKeyBtn.addEventListener("click", () => {
     const key = apiKeyInput.value.trim();
-    if (key) {
-      chrome.storage.local.set({ geminiApiKey: key }, () => {
-        appendMessage(chatHistory, "API Key saved successfully!", "system");
-        settingsPane.classList.remove("visible");
-      });
+    if (!key) {
+      appendMessage(chatHistory, "API key cannot be empty.", "system");
+      return;
     }
+    chrome.storage.local.set({ geminiApiKey: key }, () => {
+      appendMessage(chatHistory, "API key saved.", "system");
+      settingsPane.classList.remove("visible");
+    });
   });
 
-  // 4. Handle Input
   userInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && e.ctrlKey) {
       askBtn.click();
@@ -224,65 +314,77 @@ function injectSidebar() {
 
   askBtn.addEventListener("click", async () => {
     const question = userInput.value.trim();
-    if (!question) return;
+    const mode = modeSelect.value;
+    if (!question) {
+      return;
+    }
 
     appendMessage(chatHistory, question, "user");
     userInput.value = "";
     askBtn.disabled = true;
-    askBtn.innerText = "Thinking...";
+    askBtn.textContent = "Thinking...";
 
     try {
-      // Get Storage
       const storage = await chrome.storage.local.get(["geminiApiKey"]);
       const apiKey = storage.geminiApiKey;
-      if (!apiKey)
-        throw new Error("Please set your Gemini API Key in settings ⚙️");
+      if (!apiKey) {
+        throw new Error("Please set Gemini API key in settings.");
+      }
 
-      // Gather Context
       const context = getPageContext();
+      if (context.status !== "READY") {
+        appendMessage(
+          chatHistory,
+          `Context quality is ${context.status}. I will still try with available text.`,
+          "system",
+        );
+      }
 
-      // Send to Background Script
       const response = await chrome.runtime.sendMessage({
         type: "CALL_GEMINI",
         payload: {
           apiKey,
-          context: `Problem Title: ${context.title}\nDescription: ${context.description}\nUser Code:\n${context.code}`,
+          mode,
+          context,
           query: question,
-          systemPrompt:
-            "You are an expert LeetCode mentor. Analyze the user's code and the problem description. Provide specific hints, find bugs, or explain concepts. Do NOT give the full solution code unless strictly asked. Be encouraging and concise.",
         },
       });
 
       if (response && response.success) {
         appendMessage(chatHistory, response.data, "bot");
       } else {
-        throw new Error(response.error || "Unknown error from agent.");
+        throw new Error(
+          response && response.error
+            ? response.error
+            : "Unknown error from AI service.",
+        );
       }
     } catch (error) {
       appendMessage(chatHistory, `Error: ${error.message}`, "system");
     } finally {
       askBtn.disabled = false;
-      askBtn.innerText = "Ask Mentor";
+      askBtn.textContent = "Ask Mentor";
     }
   });
 
   document.body.appendChild(host);
 }
 
-// --- HELPER FUNCTIONS ---
-
 function appendMessage(container, text, type) {
   const div = document.createElement("div");
   div.classList.add("chat-message");
-  if (type === "user") div.classList.add("message-user");
-  else if (type === "bot") div.classList.add("message-bot");
-  else div.classList.add("message-system");
+  if (type === "user") {
+    div.classList.add("message-user");
+  } else if (type === "bot") {
+    div.classList.add("message-bot");
+  } else {
+    div.classList.add("message-system");
+  }
 
-  // Simple formatting
-  let formatted = text
+  const formatted = text
     .replace(
       /```([\s\S]*?)```/g,
-      '<pre style="background:#111; padding:8px; border-radius:4px; overflow-x:auto;"><code>$1</code></pre>'
+      '<pre style="background:#111; padding:8px; border-radius:4px; overflow-x:auto;"><code>$1</code></pre>',
     )
     .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
 
@@ -292,32 +394,222 @@ function appendMessage(container, text, type) {
 }
 
 function getPageContext() {
-  // Title
-  const title = document.title.split("-")[0].trim();
+  const platform = detectPlatform(window.location.href);
+  if (platform === "unknown") {
+    return {
+      status: "NOT_SUPPORTED_SITE",
+      platform,
+      title: "Unknown problem",
+      description: "This site is not supported yet.",
+      userCode: "",
+      confidence: 0,
+      url: window.location.href,
+      detectedAt: new Date().toISOString(),
+    };
+  }
 
-  // Description (Try multiple selectors)
-  let description = "";
-  const descElement =
+  const extractor = getExtractor(platform);
+  const extracted = extractor();
+  const userCode = extractUserCode();
+
+  const context = {
+    status: "READY",
+    platform,
+    slug: extracted.slug || slugFromUrl(),
+    title: extracted.title || titleFromDocument(),
+    difficulty: extracted.difficulty || "Unknown",
+    description: extracted.description || "",
+    constraints: extracted.constraints || "",
+    examples: extracted.examples || "",
+    starterCode: extracted.starterCode || "",
+    userCode,
+    confidence: 0,
+    url: window.location.href,
+    detectedAt: new Date().toISOString(),
+  };
+
+  context.confidence = calculateConfidence(context);
+  context.status =
+    context.confidence >= 0.7 ? "READY" : "CONTEXT_LOW_CONFIDENCE";
+
+  if (!context.description && !context.title) {
+    context.status = "EXTRACTION_FAILED";
+  }
+
+  return context;
+}
+
+function detectPlatform(url) {
+  const lower = url.toLowerCase();
+  if (lower.includes("leetcode.com/problems/")) {
+    return "leetcode";
+  }
+  if (lower.includes("geeksforgeeks.org/problems/")) {
+    return "geeksforgeeks";
+  }
+  if (lower.includes("hackerrank.com/challenges/")) {
+    return "hackerrank";
+  }
+  if (lower.includes("codeforces.com/problemset/problem/")) {
+    return "codeforces";
+  }
+  return "unknown";
+}
+
+function getExtractor(platform) {
+  if (platform === "leetcode") {
+    return extractLeetCode;
+  }
+  if (platform === "geeksforgeeks") {
+    return extractGeeksForGeeks;
+  }
+  if (platform === "hackerrank") {
+    return extractHackerRank;
+  }
+  if (platform === "codeforces") {
+    return extractCodeforces;
+  }
+  return () => ({ title: titleFromDocument(), description: "" });
+}
+
+function extractLeetCode() {
+  const titleEl = document.querySelector(
+    '[data-cy="question-title"], div.text-title-large a, div.text-title-large',
+  );
+  const descEl =
     document.querySelector('[data-track-load="description_content"]') ||
     document.querySelector(".elfjS") ||
     document.querySelector('div[class*="description"]');
-  if (descElement) {
-    description = descElement.innerText.substring(0, 3000); // Limit length
-  } else {
-    description = "Could not find description. Please rely on title.";
+  const difficultyEl =
+    document.querySelector(
+      '[diff], [data-difficulty], div[class*="text-difficulty"]',
+    ) ||
+    Array.from(document.querySelectorAll("div,span")).find((el) => {
+      const text = (el.textContent || "").trim();
+      return text === "Easy" || text === "Medium" || text === "Hard";
+    });
+
+  return {
+    title: normalizeText(titleEl ? titleEl.textContent : titleFromDocument()),
+    description: normalizeText(descEl ? descEl.innerText : ""),
+    difficulty: normalizeText(
+      difficultyEl ? difficultyEl.textContent : "Unknown",
+    ),
+    slug: slugFromUrl(),
+  };
+}
+
+function extractGeeksForGeeks() {
+  const titleEl = document.querySelector("h1");
+  const descEl =
+    document.querySelector('div[class*="problem-statement"]') ||
+    document.querySelector('div[class*="problems_problem_content"]') ||
+    document.querySelector("article");
+  const difficultyEl = Array.from(document.querySelectorAll("span,div")).find(
+    (el) => {
+      const text = (el.textContent || "").trim();
+      return (
+        text.includes("Difficulty") ||
+        text === "Easy" ||
+        text === "Medium" ||
+        text === "Hard"
+      );
+    },
+  );
+
+  return {
+    title: normalizeText(titleEl ? titleEl.textContent : titleFromDocument()),
+    description: normalizeText(descEl ? descEl.innerText : ""),
+    difficulty: normalizeText(
+      difficultyEl ? difficultyEl.textContent : "Unknown",
+    ),
+    slug: slugFromUrl(),
+  };
+}
+
+function extractHackerRank() {
+  const titleEl = document.querySelector('h1[class*="challenge"], h1');
+  const descEl =
+    document.querySelector("div.challenge_problem_statement") ||
+    document.querySelector('div[class*="challenge-body-html"]') ||
+    document.querySelector("article");
+
+  return {
+    title: normalizeText(titleEl ? titleEl.textContent : titleFromDocument()),
+    description: normalizeText(descEl ? descEl.innerText : ""),
+    difficulty: "Unknown",
+    slug: slugFromUrl(),
+  };
+}
+
+function extractCodeforces() {
+  const titleEl =
+    document.querySelector(".problem-statement .title") ||
+    document.querySelector(".title");
+  const descEl =
+    document.querySelector(".problem-statement") ||
+    document.querySelector("article");
+
+  return {
+    title: normalizeText(titleEl ? titleEl.textContent : titleFromDocument()),
+    description: normalizeText(descEl ? descEl.innerText : ""),
+    difficulty: "Unknown",
+    slug: slugFromUrl(),
+  };
+}
+
+function extractUserCode() {
+  const monacoLines = document.querySelectorAll(".view-lines div.view-line");
+  if (monacoLines.length > 0) {
+    return Array.from(monacoLines)
+      .map((line) => line.textContent || "")
+      .join("\n")
+      .trim();
   }
 
-  // Code (Monaco Editor)
-  let code = "";
-  const codeLines = document.querySelectorAll(".view-lines div.view-line");
-  if (codeLines.length > 0) {
-    code = Array.from(codeLines)
-      .map((line) => line.innerText)
-      .join("\\n");
-  } else {
-    // Fallback for non-Monaco or if restricted
-    code = "Could not read code lines. (Editor might be canvas or hidden)";
+  const textareaEditor = document.querySelector(
+    'textarea[class*="code"], textarea[class*="editor"], textarea',
+  );
+  if (textareaEditor && textareaEditor.value) {
+    return textareaEditor.value.trim();
   }
 
-  return { title, description, code };
+  const codeBlock = document.querySelector("pre code, pre");
+  if (codeBlock && codeBlock.textContent) {
+    return codeBlock.textContent.trim();
+  }
+
+  return "";
+}
+
+function calculateConfidence(context) {
+  let score = 0;
+  if (context.title && context.title.length > 2) {
+    score += 0.35;
+  }
+  if (context.description && context.description.length > 100) {
+    score += 0.45;
+  }
+  if (context.userCode && context.userCode.length > 5) {
+    score += 0.2;
+  }
+  return score;
+}
+
+function normalizeText(text) {
+  return (text || "").replace(/\s+/g, " ").trim().slice(0, 7000);
+}
+
+function titleFromDocument() {
+  return (document.title || "Unknown problem").split("-")[0].trim();
+}
+
+
+function slugFromUrl() {
+  const parts = window.location.pathname.split("/").filter(Boolean);
+  const index = parts.indexOf("problems");
+  if (index >= 0 && parts[index + 1]) {
+    return parts[index + 1];
+  }
+  return parts[parts.length - 1] || "unknown";
 }
