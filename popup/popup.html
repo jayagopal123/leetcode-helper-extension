@@ -1,6 +1,9 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
   <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DSA Mentor</title>
     <style>
       body {
         width: 340px;
@@ -45,7 +48,9 @@
         cursor: pointer;
         font-weight: 600;
         font-size: 14px;
-        transition: transform 0.1s, opacity 0.2s;
+        transition:
+          transform 0.1s,
+          opacity 0.2s;
       }
       button:hover {
         opacity: 0.9;
@@ -82,10 +87,11 @@
   </head>
   <body>
     <div class="container">
-      <h2>LeetCode Mentor</h2>
-      <p>AI-powered hints directly in your problem page.</p>
-      <button id="checkBtn">Check Connection</button>
-      <div id="status">Ready to connect.</div>
+      <h2>DSA Mentor</h2>
+      <p>AI-powered DSA hints from the current problem page.</p>
+      <button id="openPanelBtn">Open Mentor Panel</button>
+      <button id="checkBtn">Analyze Current Problem</button>
+      <div id="status">Ready. Open a supported DSA problem page.</div>
     </div>
     <script src="popup.js"></script>
   </body>
